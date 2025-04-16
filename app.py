@@ -22,7 +22,21 @@ from modules.indicators import (
     add_parabolic_sar,
     add_zscore,
     add_ema_crossover,
-    
+    add_sma,
+    add_cmf,
+    add_ichimoku_cloud,
+    add_dpo,
+    add_vortex,
+    add_ultimate_oscillator,
+    add_elder_ray,
+    add_price_oscillator,
+    add_bop,
+    add_ac_oscillator,
+    add_chaikin_oscillator,
+    add_tema,
+    add_fractal_indicator,
+    add_rvi,
+
 )
 
 from modules.strategy import (
@@ -45,7 +59,22 @@ from modules.strategy import (
     generate_parabolic_sar_signals,
     generate_zscore_signals,
     generate_ema_crossover_signals,
+    generate_sma_signals,
+    generate_cmf_signals,
+    generate_ichimoku_signals,
+    generate_dpo_signals,
+    generate_vortex_signals,
+    generate_ultimate_oscillator_signals,
+    generate_elder_ray_signals,
+    generate_price_oscillator_signals,
+    generate_bop_signals,
+    generate_ac_oscillator_signals,
+    generate_chaikin_oscillator_signals,   
+    generate_tema_signals,
+    generate_fractal_signals,
+    generate_rvi_signals,
 )
+
 
 from modules.backtester import run_backtest
 from modules.performance import evaluate_performance
@@ -170,10 +199,95 @@ nonparametric_indicator_mapping = {
     "signal_func": generate_ema_crossover_signals,
     "add_params": [],
     "signal_params": {}
-}
-}
+    },
+    "SMA": {
+    "add_func": add_sma,
+    "signal_func": generate_sma_signals,
+    "add_params": [],
+    "signal_params": {}
+    },
+    "CMF": {
+    "add_func": add_cmf,
+    "signal_func": generate_cmf_signals,
+    "add_params": [],
+    "signal_params": {}
+    },
+    "Ichimoku Cloud": {
+        "add_func": add_ichimoku_cloud,
+        "signal_func": generate_ichimoku_signals,
+        "add_params": [],
+        "signal_params": {}
+    },
+    "DPO": {
+    "add_func": add_dpo,
+    "signal_func": generate_dpo_signals,
+    "add_params": [],
+    "signal_params": {}
+    },
+    "Vortex Indicator": {
+    "add_func": add_vortex,
+    "signal_func": generate_vortex_signals,
+    "add_params": [],
+    "signal_params": {}
+    },
+    "Ultimate Oscillator": {
+        "add_func": add_ultimate_oscillator,
+        "signal_func": generate_ultimate_oscillator_signals,
+        "add_params": [],
+        "signal_params": {}
+    },
+    "Elder Ray Index": {
+        "add_func": add_elder_ray,
+        "signal_func": generate_elder_ray_signals,
+        "add_params": [],
+        "signal_params": {}
+    },
+    "Price Oscillator": {
+        "add_func": add_price_oscillator,
+        "signal_func": generate_price_oscillator_signals,
+        "add_params": [],
+        "signal_params": {}
+    },
+    "Balance of Power": {
+    "add_func": add_bop,
+    "signal_func": generate_bop_signals,
+    "add_params": [],
+    "signal_params": {}
+    },
+    "Acceleration/Deceleration Oscillator": {
+    "add_func": add_ac_oscillator,
+    "signal_func": generate_ac_oscillator_signals,
+    "add_params": [],
+    "signal_params": {}
+    },
+    "Chaikin Oscillator": {
+    "add_func": add_chaikin_oscillator,
+    "signal_func": generate_chaikin_oscillator_signals,
+    "add_params": [],
+    "signal_params": {}
+    },
+    "TEMA": {
+    "add_func": add_tema,
+    "signal_func": generate_tema_signals,
+    "add_params": [],
+    "signal_params": {}
+    },
+    "Fractal Indicator": {
+    "add_func": add_fractal_indicator,
+    "signal_func": generate_fractal_signals,
+    "add_params": [],
+    "signal_params": {}
+    },
+    "Relative Vigor Index": {
+        "add_func": add_rvi,
+        "signal_func": generate_rvi_signals,
+        "add_params": [],
+        "signal_params": {}
+    },
 
-import pandas as pd
+
+
+}
 
 import pandas as pd
 

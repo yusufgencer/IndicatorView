@@ -285,3 +285,182 @@ def add_ema_crossover(df: pd.DataFrame, short_period: int = 12, long_period: int
     df["EMA_Short"] = df["Close"].ewm(span=short_period, adjust=False).mean()
     df["EMA_Long"] = df["Close"].ewm(span=long_period, adjust=False).mean()
     return df
+
+def add_sma(df: pd.DataFrame) -> pd.DataFrame:
+    df = df.copy()
+    window = 20  # sabit pencere uzunluğu
+    df['SMA'] = df['Close'].rolling(window=window).mean()
+    return df
+
+
+def add_cmf(df: pd.DataFrame) -> pd.DataFrame:
+    df = df.copy()
+    window = 20  # sabit pencere
+    mf_multiplier = ((df['Close'] - df['Low']) - (df['High'] - df['Close'])) / (df['High'] - df['Low'])
+    mf_multiplier = mf_multiplier.replace([np.inf, -np.inf], 0).fillna(0)
+
+    mf_volume = mf_multiplier * df['Volume']
+    df['CMF'] = mf_volume.rolling(window=window).sum() / df['Volume'].rolling(window=window).sum()
+    return df
+
+
+def add_ichimoku_cloud(df: pd.DataFrame) -> pd.DataFrame:
+    df = df.copy()
+
+    high_9 = df['High'].rolling(window=9).max()
+    low_9 = df['Low'].rolling(window=9).min()
+    df['Tenkan_sen'] = (high_9 + low_9) / 2
+
+    high_26 = df['High'].rolling(window=26).max()
+    low_26 = df['Low'].rolling(window=26).min()
+    df['Kijun_sen'] = (high_26 + low_26) / 2
+
+    df['Senkou_span_a'] = ((df['Tenkan_sen'] + df['Kijun_sen']) / 2).shift(26)
+
+    high_52 = df['High'].rolling(window=52).max()
+    low_52 = df['Low'].rolling(window=52).min()
+    df['Senkou_span_b'] = ((high_52 + low_52) / 2).shift(26)
+
+    df['Chikou_span'] = df['Close'].shift(-26)
+
+    return df
+
+def add_dpo(df: pd.DataFrame) -> pd.DataFrame:
+    df = df.copy()
+    period = 20  # sabit pencere
+    shift = int(period / 2) + 1
+
+    df['SMA_dpo'] = df['Close'].rolling(window=period).mean()
+    df['DPO'] = df['Close'].shift(shift) - df['SMA_dpo']
+    return df
+
+def add_vortex(df: pd.DataFrame) -> pd.DataFrame:
+    df = df.copy()
+    period = 14
+
+    tr = pd.Series(index=df.index)
+    tr = df[['High', 'Low', 'Close']].copy()
+    tr['HL'] = df['High'] - df['Low']
+    tr['HC'] = abs(df['High'] - df['Close'].shift(1))
+    tr['LC'] = abs(df['Low'] - df['Close'].shift(1))
+    tr['TR'] = tr[['HL', 'HC', 'LC']].max(axis=1)
+
+    vm_plus = abs(df['High'] - df['Low'].shift(1))
+    vm_minus = abs(df['Low'] - df['High'].shift(1))
+
+    tr_sum = tr['TR'].rolling(window=period).sum()
+    vi_plus = vm_plus.rolling(window=period).sum() / tr_sum
+    vi_minus = vm_minus.rolling(window=period).sum() / tr_sum
+
+    df['VI_plus'] = vi_plus
+    df['VI_minus'] = vi_minus
+    return df
+
+def add_ultimate_oscillator(df: pd.DataFrame) -> pd.DataFrame:
+    df = df.copy()
+
+    high = df['High']
+    low = df['Low']
+    close = df['Close']
+
+    bp = close - pd.concat([low, close.shift(1)], axis=1).min(axis=1)
+    tr = pd.concat([high, close.shift(1)], axis=1).max(axis=1) - pd.concat([low, close.shift(1)], axis=1).min(axis=1)
+
+    avg7 = bp.rolling(window=7).sum() / tr.rolling(window=7).sum()
+    avg14 = bp.rolling(window=14).sum() / tr.rolling(window=14).sum()
+    avg28 = bp.rolling(window=28).sum() / tr.rolling(window=28).sum()
+
+    df['UO'] = 100 * (4 * avg7 + 2 * avg14 + avg28) / 7
+    return df
+
+def add_elder_ray(df: pd.DataFrame) -> pd.DataFrame:
+    df = df.copy()
+    ema_period = 13
+    df['EMA'] = df['Close'].ewm(span=ema_period, adjust=False).mean()
+    df['BullPower'] = df['High'] - df['EMA']
+    df['BearPower'] = df['Low'] - df['EMA']
+    return df
+
+def add_price_oscillator(df: pd.DataFrame) -> pd.DataFrame:
+    df = df.copy()
+    fast = 12
+    slow = 26
+    signal = 9
+
+    df['EMA_fast'] = df['Close'].ewm(span=fast, adjust=False).mean()
+    df['EMA_slow'] = df['Close'].ewm(span=slow, adjust=False).mean()
+    df['PPO'] = ((df['EMA_fast'] - df['EMA_slow']) / df['EMA_slow']) * 100
+    df['PPO_signal'] = df['PPO'].ewm(span=signal, adjust=False).mean()
+    return df
+
+def add_bop(df: pd.DataFrame) -> pd.DataFrame:
+    df = df.copy()
+    bop = (df['Close'] - df['Open']) / (df['High'] - df['Low'])
+    df['BOP'] = bop.replace([np.inf, -np.inf], 0).fillna(0)
+    return df
+
+def add_ac_oscillator(df: pd.DataFrame) -> pd.DataFrame:
+    df = df.copy()
+    median_price = (df['High'] + df['Low']) / 2
+
+    ao_short = median_price.rolling(window=5).mean()
+    ao_long = median_price.rolling(window=34).mean()
+    df['AO'] = ao_short - ao_long
+
+    df['AC'] = df['AO'] - df['AO'].rolling(window=5).mean()
+    return df
+
+def add_chaikin_oscillator(df: pd.DataFrame) -> pd.DataFrame:
+    df = df.copy()
+
+    mfm = ((df['Close'] - df['Low']) - (df['High'] - df['Close'])) / (df['High'] - df['Low'])
+    mfm = mfm.replace([np.inf, -np.inf], 0).fillna(0)
+    mfv = mfm * df['Volume']
+
+    df['ADL'] = mfv.cumsum()
+    df['CO'] = df['ADL'].ewm(span=3, adjust=False).mean() - df['ADL'].ewm(span=10, adjust=False).mean()
+    return df
+
+def add_tema(df: pd.DataFrame) -> pd.DataFrame:
+    df = df.copy()
+    span = 20  # sabit periyot
+
+    ema1 = df['Close'].ewm(span=span, adjust=False).mean()
+    ema2 = ema1.ewm(span=span, adjust=False).mean()
+    ema3 = ema2.ewm(span=span, adjust=False).mean()
+
+    df['TEMA'] = 3 * ema1 - 3 * ema2 + ema3
+    return df
+
+def add_fractal_indicator(df: pd.DataFrame) -> pd.DataFrame:
+    df = df.copy()
+    highs = df['High']
+    lows = df['Low']
+
+    df['Fractal_High'] = (
+        (highs.shift(2) < highs.shift(0)) &
+        (highs.shift(1) < highs.shift(0)) &
+        (highs.shift(-1) < highs.shift(0)) &
+        (highs.shift(-2) < highs.shift(0))
+    )
+
+    df['Fractal_Low'] = (
+        (lows.shift(2) > lows.shift(0)) &
+        (lows.shift(1) > lows.shift(0)) &
+        (lows.shift(-1) > lows.shift(0)) &
+        (lows.shift(-2) > lows.shift(0))
+    )
+
+    return df
+
+def add_rvi(df: pd.DataFrame) -> pd.DataFrame:
+    df = df.copy()
+
+    numerator = df['Close'] - df['Open']
+    denominator = df['High'] - df['Low']
+    rvi_raw = numerator / denominator.replace(0, np.nan)
+    rvi_raw = rvi_raw.replace([np.inf, -np.inf], 0).fillna(0)
+
+    df['RVI'] = rvi_raw.rolling(window=4).mean()
+    df['RVI_signal'] = df['RVI'].rolling(window=4).mean()
+    return df

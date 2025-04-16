@@ -363,3 +363,292 @@ def generate_ema_crossover_signals(df: pd.DataFrame) -> pd.DataFrame:
             position = False
 
     return df
+
+def generate_sma_signals(df: pd.DataFrame) -> pd.DataFrame:
+    df = df.copy()
+    df['Signal'] = None
+    position = False
+
+    for i in range(1, len(df)):
+        close = df['Close'].iloc[i]
+        sma = df['SMA'].iloc[i]
+        prev_close = df['Close'].iloc[i - 1]
+        prev_sma = df['SMA'].iloc[i - 1]
+
+        # Aşağıdan yukarı keserse BUY
+        if not position and prev_close < prev_sma and close > sma:
+            df.at[df.index[i], 'Signal'] = 'BUY'
+            position = True
+        # Yukarıdan aşağı keserse SELL
+        elif position and prev_close > prev_sma and close < sma:
+            df.at[df.index[i], 'Signal'] = 'SELL'
+            position = False
+
+    return df
+
+
+def generate_cmf_signals(df: pd.DataFrame) -> pd.DataFrame:
+    df = df.copy()
+    df['Signal'] = None
+    position = False
+
+    buy_threshold = 0.05
+    sell_threshold = -0.05
+
+    for i in range(1, len(df)):
+        cmf = df['CMF'].iloc[i]
+
+        if not position and cmf > buy_threshold:
+            df.at[df.index[i], 'Signal'] = 'BUY'
+            position = True
+        elif position and cmf < sell_threshold:
+            df.at[df.index[i], 'Signal'] = 'SELL'
+            position = False
+
+    return df
+
+
+def generate_ichimoku_signals(df: pd.DataFrame) -> pd.DataFrame:
+    df = df.copy()
+    df['Signal'] = None
+    position = False
+
+    for i in range(52, len(df)):  # İlk 52 gün boşluk oluşabilir
+        price = df['Close'].iloc[i]
+        kijun = df['Kijun_sen'].iloc[i]
+        tenkan = df['Tenkan_sen'].iloc[i]
+        span_a = df['Senkou_span_a'].iloc[i]
+        span_b = df['Senkou_span_b'].iloc[i]
+
+        # Fiyat bulutun üstünde ve Tenkan > Kijun ise al sinyali
+        if not position and price > max(span_a, span_b) and tenkan > kijun:
+            df.at[df.index[i], 'Signal'] = 'BUY'
+            position = True
+
+        # Fiyat bulutun altında ve Tenkan < Kijun ise sat sinyali
+        elif position and price < min(span_a, span_b) and tenkan < kijun:
+            df.at[df.index[i], 'Signal'] = 'SELL'
+            position = False
+
+    return df
+
+def generate_dpo_signals(df: pd.DataFrame) -> pd.DataFrame:
+    df = df.copy()
+    df['Signal'] = None
+    position = False
+
+    for i in range(1, len(df)):
+        dpo = df['DPO'].iloc[i]
+        prev_dpo = df['DPO'].iloc[i - 1]
+
+        # DPO sıfır çizgisini aşağıdan yukarı keserse BUY
+        if not position and prev_dpo < 0 and dpo > 0:
+            df.at[df.index[i], 'Signal'] = 'BUY'
+            position = True
+
+        # Yukarıdan aşağı keserse SELL
+        elif position and prev_dpo > 0 and dpo < 0:
+            df.at[df.index[i], 'Signal'] = 'SELL'
+            position = False
+
+    return df
+
+def generate_vortex_signals(df: pd.DataFrame) -> pd.DataFrame:
+    df = df.copy()
+    df['Signal'] = None
+    position = False
+
+    for i in range(1, len(df)):
+        vi_plus = df['VI_plus'].iloc[i]
+        vi_minus = df['VI_minus'].iloc[i]
+        prev_vi_plus = df['VI_plus'].iloc[i - 1]
+        prev_vi_minus = df['VI_minus'].iloc[i - 1]
+
+        # BUY sinyali: VI+ aşağıdan yukarı VI-’yı keserse
+        if not position and prev_vi_plus < prev_vi_minus and vi_plus > vi_minus:
+            df.at[df.index[i], 'Signal'] = 'BUY'
+            position = True
+
+        # SELL sinyali: VI+ yukarıdan aşağı VI-’nın altına inerse
+        elif position and prev_vi_plus > prev_vi_minus and vi_plus < vi_minus:
+            df.at[df.index[i], 'Signal'] = 'SELL'
+            position = False
+
+    return df
+
+def generate_ultimate_oscillator_signals(df: pd.DataFrame) -> pd.DataFrame:
+    df = df.copy()
+    df['Signal'] = None
+    position = False
+
+    for i in range(1, len(df)):
+        uo = df['UO'].iloc[i]
+
+        if not position and uo < 30:
+            df.at[df.index[i], 'Signal'] = 'BUY'
+            position = True
+        elif position and uo > 70:
+            df.at[df.index[i], 'Signal'] = 'SELL'
+            position = False
+
+    return df
+
+def generate_elder_ray_signals(df: pd.DataFrame) -> pd.DataFrame:
+    df = df.copy()
+    df['Signal'] = None
+    position = False
+
+    for i in range(2, len(df)):
+        bull_now = df['BullPower'].iloc[i]
+        bull_prev = df['BullPower'].iloc[i - 1]
+        bear_now = df['BearPower'].iloc[i]
+        bear_prev = df['BearPower'].iloc[i - 1]
+
+        # BUY: BullPower pozitif ve artıyorsa
+        if not position and bull_now > 0 and bull_now > bull_prev:
+            df.at[df.index[i], 'Signal'] = 'BUY'
+            position = True
+
+        # SELL: BearPower negatif ve düşüyorsa
+        elif position and bear_now < 0 and bear_now < bear_prev:
+            df.at[df.index[i], 'Signal'] = 'SELL'
+            position = False
+
+    return df
+
+def generate_price_oscillator_signals(df: pd.DataFrame) -> pd.DataFrame:
+    df = df.copy()
+    df['Signal'] = None
+    position = False
+
+    for i in range(1, len(df)):
+        ppo = df['PPO'].iloc[i]
+        signal = df['PPO_signal'].iloc[i]
+        prev_ppo = df['PPO'].iloc[i - 1]
+        prev_signal = df['PPO_signal'].iloc[i - 1]
+
+        if not position and prev_ppo < prev_signal and ppo > signal:
+            df.at[df.index[i], 'Signal'] = 'BUY'
+            position = True
+        elif position and prev_ppo > prev_signal and ppo < signal:
+            df.at[df.index[i], 'Signal'] = 'SELL'
+            position = False
+
+    return df
+
+def generate_bop_signals(df: pd.DataFrame) -> pd.DataFrame:
+    df = df.copy()
+    df['Signal'] = None
+    position = False
+
+    for i in range(1, len(df)):
+        bop = df['BOP'].iloc[i]
+
+        if not position and bop > 0:
+            df.at[df.index[i], 'Signal'] = 'BUY'
+            position = True
+        elif position and bop < 0:
+            df.at[df.index[i], 'Signal'] = 'SELL'
+            position = False
+
+    return df
+
+def generate_ac_oscillator_signals(df: pd.DataFrame) -> pd.DataFrame:
+    df = df.copy()
+    df['Signal'] = None
+    position = False
+
+    for i in range(2, len(df)):
+        ac_now = df['AC'].iloc[i]
+        ac_prev = df['AC'].iloc[i - 1]
+
+        # AC pozitif ve artıyorsa BUY
+        if not position and ac_now > 0 and ac_now > ac_prev:
+            df.at[df.index[i], 'Signal'] = 'BUY'
+            position = True
+
+        # AC negatif ve azalıyorsa SELL
+        elif position and ac_now < 0 and ac_now < ac_prev:
+            df.at[df.index[i], 'Signal'] = 'SELL'
+            position = False
+
+    return df
+
+def generate_chaikin_oscillator_signals(df: pd.DataFrame) -> pd.DataFrame:
+    df = df.copy()
+    df['Signal'] = None
+    position = False
+
+    for i in range(1, len(df)):
+        co = df['CO'].iloc[i]
+        prev_co = df['CO'].iloc[i - 1]
+
+        # BUY: CO sıfır çizgisini aşağıdan yukarı keserse
+        if not position and prev_co < 0 and co > 0:
+            df.at[df.index[i], 'Signal'] = 'BUY'
+            position = True
+
+        # SELL: CO sıfır çizgisini yukarıdan aşağı keserse
+        elif position and prev_co > 0 and co < 0:
+            df.at[df.index[i], 'Signal'] = 'SELL'
+            position = False
+
+    return df
+
+def generate_tema_signals(df: pd.DataFrame) -> pd.DataFrame:
+    df = df.copy()
+    df['Signal'] = None
+    position = False
+
+    for i in range(1, len(df)):
+        close = df['Close'].iloc[i]
+        tema = df['TEMA'].iloc[i]
+        prev_close = df['Close'].iloc[i - 1]
+        prev_tema = df['TEMA'].iloc[i - 1]
+
+        # BUY: fiyat TEMA'yı aşağıdan yukarı keserse
+        if not position and prev_close < prev_tema and close > tema:
+            df.at[df.index[i], 'Signal'] = 'BUY'
+            position = True
+
+        # SELL: fiyat TEMA'yı yukarıdan aşağı keserse
+        elif position and prev_close > prev_tema and close < tema:
+            df.at[df.index[i], 'Signal'] = 'SELL'
+            position = False
+
+    return df
+
+def generate_fractal_signals(df: pd.DataFrame) -> pd.DataFrame:
+    df = df.copy()
+    df['Signal'] = None
+    position = False
+
+    for i in range(2, len(df) - 2):
+        if not position and df['Fractal_Low'].iloc[i]:
+            df.at[df.index[i], 'Signal'] = 'BUY'
+            position = True
+        elif position and df['Fractal_High'].iloc[i]:
+            df.at[df.index[i], 'Signal'] = 'SELL'
+            position = False
+
+    return df
+
+def generate_rvi_signals(df: pd.DataFrame) -> pd.DataFrame:
+    df = df.copy()
+    df['Signal'] = None
+    position = False
+
+    for i in range(1, len(df)):
+        rvi = df['RVI'].iloc[i]
+        signal = df['RVI_signal'].iloc[i]
+        prev_rvi = df['RVI'].iloc[i - 1]
+        prev_signal = df['RVI_signal'].iloc[i - 1]
+
+        if not position and prev_rvi < prev_signal and rvi > signal:
+            df.at[df.index[i], 'Signal'] = 'BUY'
+            position = True
+        elif position and prev_rvi > prev_signal and rvi < signal:
+            df.at[df.index[i], 'Signal'] = 'SELL'
+            position = False
+
+    return df
