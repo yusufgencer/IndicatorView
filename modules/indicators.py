@@ -437,21 +437,24 @@ def add_fractal_indicator(df: pd.DataFrame) -> pd.DataFrame:
     highs = df['High']
     lows = df['Low']
 
-    df['Fractal_High'] = (
-        (highs.shift(2) < highs.shift(0)) &
-        (highs.shift(1) < highs.shift(0)) &
-        (highs.shift(-1) < highs.shift(0)) &
-        (highs.shift(-2) < highs.shift(0))
-    )
+    df['Fractal_High'] = False
+    df['Fractal_Low'] = False
 
-    df['Fractal_Low'] = (
-        (lows.shift(2) > lows.shift(0)) &
-        (lows.shift(1) > lows.shift(0)) &
-        (lows.shift(-1) > lows.shift(0)) &
-        (lows.shift(-2) > lows.shift(0))
-    )
+    for i in range(2, len(df)):
+        if (
+            highs[i - 2] < highs[i] and
+            highs[i - 1] < highs[i]
+        ):
+            df.at[df.index[i], 'Fractal_High'] = True
+
+        if (
+            lows[i - 2] > lows[i] and
+            lows[i - 1] > lows[i]
+        ):
+            df.at[df.index[i], 'Fractal_Low'] = True
 
     return df
+
 
 def add_rvi(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
