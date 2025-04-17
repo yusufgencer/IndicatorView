@@ -347,3 +347,40 @@ def strategy_kalman_rsi(df: pd.DataFrame,
 
     return df
 
+
+
+def strategy_fractal_alligator(df: pd.DataFrame) -> pd.DataFrame:
+    df = df.copy()
+
+    # Alligator bileşenleri
+    df['Jaw'] = df['Close'].rolling(window=13).mean().shift(8)
+    df['Teeth'] = df['Close'].rolling(window=8).mean().shift(5)
+    df['Lips'] = df['Close'].rolling(window=5).mean().shift(3)
+
+    # Fractal tespiti (sadece geçmişe bakar)
+    df['Fractal_High'] = False
+    df['Fractal_Low'] = False
+    for i in range(2, len(df)):
+        if df['High'].iloc[i - 2] < df['High'].iloc[i] and df['High'].iloc[i - 1] < df['High'].iloc[i]:
+            df.at[df.index[i], 'Fractal_High'] = True
+        if df['Low'].iloc[i - 2] > df['Low'].iloc[i] and df['Low'].iloc[i - 1] > df['Low'].iloc[i]:
+            df.at[df.index[i], 'Fractal_Low'] = True
+
+    # Sinyal üretimi
+    df['Signal'] = None
+    in_position = False
+
+    for i in range(2, len(df)):
+        close = df['Close'].iloc[i]
+        jaw = df['Jaw'].iloc[i]
+        if pd.isna(jaw):
+            continue
+
+        if not in_position and df['Fractal_High'].iloc[i - 1] and close > jaw:
+            df.at[df.index[i], 'Signal'] = 'BUY'
+            in_position = True
+        elif in_position and df['Fractal_Low'].iloc[i - 1] and close < jaw:
+            df.at[df.index[i], 'Signal'] = 'SELL'
+            in_position = False
+
+    return df

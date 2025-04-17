@@ -652,3 +652,4 @@ def generate_rvi_signals(df: pd.DataFrame) -> pd.DataFrame:
             position = False
 
     return df
+

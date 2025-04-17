@@ -414,8 +414,10 @@ strategy_funcs = {
     "🔥 Triple Confirmation": custom_strategies.strategy_triple_confirmation,
     "📊 Volatility Breakout + Volume": custom_strategies.strategy_volatility_breakout_with_volume,
     "📉 RSI + Bollinger Bands": custom_strategies.strategy_rsi_bollinger_with_position,
-    "🧠 Kalman Trend + RSI": custom_strategies.strategy_kalman_rsi
+    "🧠 Kalman Trend + RSI": custom_strategies.strategy_kalman_rsi,
+    "🐊 Fractal + Alligator": custom_strategies.strategy_fractal_alligator
 }
+
 selected_strategies = st.sidebar.multiselect("📘 Gelişmiş Stratejiler", list(strategy_funcs.keys()))
 
 st.sidebar.subheader("🧠 Ortak Strateji Ayarları")
