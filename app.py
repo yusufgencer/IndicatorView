@@ -445,6 +445,94 @@ def generate_composite_strategy_signals_with_sl_tp(
 
     return df
 
+def generate_composite_strategy_signals_with_trailing_sl_tp(
+    df: pd.DataFrame,
+    selected_indicators: list,
+    parametric_indicator_mapping: dict,
+    nonparametric_indicator_mapping: dict,
+    indicator_params: dict,
+    default_indicator_params: dict,
+    threshold: float = 0.6,
+    trailing_stop: float = 0.02,
+    take_profit: float = 0.05
+) -> pd.DataFrame:
+    """
+    - Majority‑voting BUY/SELL sinyali
+    - Sabit Take‑Profit + Dinamik (Trailing) Stop‑Loss
+    - Pozisyon döngüsü: sadece BUY→SELL→BUY
+    """
+    df = df.copy()
+
+    # 1) Sinyal matrisi oluşturma (diğer fonksiyonla aynı)
+    signal_matrix = pd.DataFrame(index=df.index)
+    for ind in selected_indicators:
+        mapping = parametric_indicator_mapping.get(ind) or nonparametric_indicator_mapping.get(ind)
+        if not mapping:
+            continue
+        params   = indicator_params.get(ind, default_indicator_params.get(ind, {}))
+        add_args = {k: params[k] for k in mapping.get("add_params", []) if k in params}
+        df       = mapping["add_func"](df, **add_args)
+        sig_args = {tgt: params[src] for src, tgt in mapping.get("signal_params", {}).items() if src in params}
+        tmp = mapping["signal_func"](df.copy(), **sig_args)
+        signal_matrix[ind] = tmp["Signal"]
+
+    # 2) Composite + Dinamik SL + Sabit TP
+    df["Signal"]     = None
+    position          = False
+    entry_price       = None
+    highest_price     = None
+
+    for i, idx in enumerate(df.index):
+        price = df.at[idx, "Close"]
+
+        # Pozisyondayken önce TP/Trailing SL kontrolü
+        if position:
+            # En yüksek fiyatı güncelle
+            highest_price = max(highest_price, price)
+            # Sabit kâr hedefi ve dinamik stop seviyesi
+            tp_price = entry_price * (1 + take_profit)
+            ts_price = highest_price * (1 - trailing_stop)
+
+            # Sabit Take‑Profit
+            if price >= tp_price:
+                df.at[idx, "Signal"]    = "SELL"
+                position                   = False
+                entry_price, highest_price = None, None
+                continue
+            # Dinamik Trailing Stop‑Loss
+            if price <= ts_price:
+                df.at[idx, "Signal"]    = "SELL"
+                position                   = False
+                entry_price, highest_price = None, None
+                continue
+
+        # Composite SELL sinyali (pozisyondayken)
+        if position:
+            today       = signal_matrix.iloc[i]
+            valid_count = today.notna().sum()
+            if valid_count:
+                sell_ratio = (today == "SELL").sum() / valid_count
+                if sell_ratio >= threshold:
+                    df.at[idx, "Signal"]    = "SELL"
+                    position                  = False
+                    entry_price, highest_price = None, None
+                    continue
+
+        # Composite BUY sinyali (pozisyon kapalıyken)
+        if not position:
+            today       = signal_matrix.iloc[i]
+            valid_count = today.notna().sum()
+            if valid_count:
+                buy_ratio = (today == "BUY").sum() / valid_count
+                if buy_ratio >= threshold:
+                    df.at[idx, "Signal"] = "BUY"
+                    position               = True
+                    entry_price            = price
+                    highest_price          = price
+                    continue
+
+    return df
+
 # ------------------------ STREAMLIT BAŞLANGIÇ ------------------------
 st.set_page_config(page_title="📊 İndikatör Bazlı Strateji Simülatörü", layout="wide")
 st.title("🤖 İndikatör Tabanlı Backtest Uygulaması")
@@ -526,27 +614,38 @@ composite_threshold = st.sidebar.slider(
     min_value=0,
     max_value=100,
     value=60,
-    step=5,
+    step=1,
     help="Örn: 60% seçersen, seçili göstergelerin en az %60'ı aynı sinyali vermelidir."
 ) / 100  # yüzdelikten orana çeviriyoruz
 
 st.sidebar.subheader("⚙️ Stop‑Loss & Take‑Profit Ayarları")
 stop_loss_pct = st.sidebar.slider(
     "Stop‑Loss (%)",
-    min_value=0,
-    max_value=100,
-    value=2,
-    step=1,
+    min_value=0.0,
+    max_value=20.0,
+    value=2.0,
+    step=0.1,
     help="Pozisyon açıldıktan sonra en fazla kaç yüzde zarar tolere edilsin?"
 ) / 100
 
 take_profit_pct = st.sidebar.slider(
     "Take‑Profit (%)",
-    min_value=0,
-    max_value=100,
-    value=5,
-    step=1,
+    min_value=0.0,
+    max_value=50.0,
+    value=5.0,
+    step=0.1,
     help="Pozisyon açıldıktan sonra kaç yüzde karla çıkılsın?"
+) / 100
+
+# Yeni: Dinamik (Trailing) Stop‑Loss
+st.sidebar.subheader("⚙️ Dinamik (Trailing) Stop‑Loss Ayarı")
+trailing_stop_pct = st.sidebar.slider(
+    "Trailing Stop (%)",
+    min_value=0.0,
+    max_value=20.0,
+    value=2.0,
+    step=0.1,
+    help="Pozisyon açıldıktan sonra zararı takip eden stop seviyesi yüzde kaç olsun?"
 ) / 100
 
 # ------------------------ VERİYİ ÇEK ------------------------
@@ -664,10 +763,36 @@ if st.sidebar.button("🚀 Strateji Testini Başlat"):
             plot_price_with_signals(df_sltp, title="Ortak Strateji (SL/TP)"),
             use_container_width=True
         )
-
         # Performans kaydı
         performances.append({"Strateji": "🧠 Composite (SL/TP)", **perf_sltp})
         strategy_results["🧠 Composite (SL/TP)"] = df_sltp
+
+        # Dinamik SL + Sabit TP testi
+        df_dynamic = full_df.copy()
+        df_dynamic = generate_composite_strategy_signals_with_trailing_sl_tp(
+            df=df_dynamic,
+            selected_indicators=all_selected,
+            parametric_indicator_mapping=parametric_indicator_mapping,
+            nonparametric_indicator_mapping=nonparametric_indicator_mapping,
+            indicator_params=user_indicator_params,
+            default_indicator_params=default_indicator_params,
+            threshold=composite_threshold,
+            trailing_stop=trailing_stop_pct,
+            take_profit=take_profit_pct
+        )
+        df_dynamic = df_dynamic[df_dynamic['Date'] >= user_start_date_aware].reset_index(drop=True)
+        df_dynamic = run_backtest(df_dynamic, initial_cash=10000)
+        perf_dynamic = evaluate_performance(df_dynamic, initial_cash=10000)
+
+        st.markdown("### 📊 Composite (Trailing SL & TP)")
+        st.plotly_chart(
+            plot_price_with_signals(df_dynamic, title="Ortak Strateji (Trailing SL & TP)"),
+            use_container_width=True
+        )
+        performances.append({"Strateji": "🧠 Composite (Trailing SL & TP)", **perf_dynamic})
+        strategy_results["🧠 Composite (Trailing SL & TP)"] = df_dynamic
+
+
 
 
 
