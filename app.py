@@ -533,6 +533,70 @@ def generate_composite_strategy_signals_with_trailing_sl_tp(
 
     return df
 
+def generate_buy_only_composite_strategy_with_trailing_sl_tp(
+    df: pd.DataFrame,
+    selected_indicators: list,
+    parametric_indicator_mapping: dict,
+    nonparametric_indicator_mapping: dict,
+    indicator_params: dict,
+    default_indicator_params: dict,
+    threshold: float = 0.6,
+    trailing_stop: float = 0.02,
+    take_profit: float = 0.05
+) -> pd.DataFrame:
+    """
+    - BUY kararları çoğunluk sinyale göre verilir.
+    - SELL kararları sadece TP veya Trailing SL ile olur.
+    - SELL sinyali göstergelerden asla gelmez.
+    """
+    df = df.copy()
+    signal_matrix = pd.DataFrame(index=df.index)
+
+    for ind in selected_indicators:
+        mapping = parametric_indicator_mapping.get(ind) or nonparametric_indicator_mapping.get(ind)
+        if not mapping:
+            continue
+        params   = indicator_params.get(ind, default_indicator_params.get(ind, {}))
+        add_args = {k: params[k] for k in mapping.get("add_params", []) if k in params}
+        df       = mapping["add_func"](df, **add_args)
+        sig_args = {tgt: params[src] for src, tgt in mapping.get("signal_params", {}).items() if src in params}
+        tmp = mapping["signal_func"](df.copy(), **sig_args)
+        signal_matrix[ind] = tmp["Signal"]
+
+    df["Signal"]      = None
+    position          = False
+    entry_price       = None
+    highest_price     = None
+
+    for i, idx in enumerate(df.index):
+        price = df.at[idx, "Close"]
+
+        # Pozisyondayken sadece TP veya SL kontrol edilir
+        if position:
+            highest_price = max(highest_price, price)
+            tp_price = entry_price * (1 + take_profit)
+            ts_price = highest_price * (1 - trailing_stop)
+
+            if price >= tp_price or price <= ts_price:
+                df.at[idx, "Signal"] = "SELL"
+                position = False
+                entry_price, highest_price = None, None
+                continue
+
+        # Pozisyon yoksa BUY sinyali değerlendir
+        if not position:
+            today = signal_matrix.iloc[i]
+            valid_count = today.notna().sum()
+            if valid_count:
+                buy_ratio = (today == "BUY").sum() / valid_count
+                if buy_ratio >= threshold:
+                    df.at[idx, "Signal"] = "BUY"
+                    position = True
+                    entry_price = price
+                    highest_price = price
+
+    return df
+
 # ------------------------ STREAMLIT BAŞLANGIÇ ------------------------
 st.set_page_config(page_title="📊 İndikatör Bazlı Strateji Simülatörü", layout="wide")
 st.title("🤖 İndikatör Tabanlı Backtest Uygulaması")
@@ -766,6 +830,36 @@ if st.sidebar.button("🚀 Strateji Testini Başlat"):
         # Performans kaydı
         performances.append({"Strateji": "🧠 Composite (SL/TP)", **perf_sltp})
         strategy_results["🧠 Composite (SL/TP)"] = df_sltp
+
+        # ——————————————————————————————————————————————
+        # 3) Composite (Buy Only + Trailing SL & TP)
+        # ——————————————————————————————————————————————
+        df_trailing = full_df.copy()
+        df_trailing = generate_buy_only_composite_strategy_with_trailing_sl_tp(
+            df=df_trailing,
+            selected_indicators=all_selected,
+            parametric_indicator_mapping=parametric_indicator_mapping,
+            nonparametric_indicator_mapping=nonparametric_indicator_mapping,
+            indicator_params=user_indicator_params,
+            default_indicator_params=default_indicator_params,
+            threshold=composite_threshold,
+            trailing_stop=stop_loss_pct,
+            take_profit=take_profit_pct
+        )
+        df_trailing = df_trailing[df_trailing['Date'] >= user_start_date_aware].reset_index(drop=True)
+        df_trailing = run_backtest(df_trailing, initial_cash=10000)
+        perf_trailing = evaluate_performance(df_trailing, initial_cash=10000)
+
+        st.markdown("### 📊 Composite (Buy Only + Trailing SL & TP)")
+        st.plotly_chart(
+            plot_price_with_signals(df_trailing, title="Ortak Strateji (Buy Only + Trailing SL/TP)"),
+            use_container_width=True
+        )
+
+        # Performans kaydı
+        performances.append({"Strateji": "🧠 Composite (Buy Only + Trailing SL/TP)", **perf_trailing})
+        strategy_results["🧠 Composite (Buy Only + Trailing SL/TP)"] = df_trailing
+
 
         # Dinamik SL + Sabit TP testi
         df_dynamic = full_df.copy()
