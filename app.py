@@ -356,6 +356,95 @@ def generate_composite_strategy_signals(
     return df
 
 
+import pandas as pd
+
+def generate_composite_strategy_signals_with_sl_tp(
+    df: pd.DataFrame,
+    selected_indicators: list,
+    parametric_indicator_mapping: dict,
+    nonparametric_indicator_mapping: dict,
+    indicator_params: dict,
+    default_indicator_params: dict,
+    threshold: float = 0.6,
+    stop_loss: float = 0.02,
+    take_profit: float = 0.05
+) -> pd.DataFrame:
+    """
+    - Majority‑voting BUY/SELL sinyali
+    - Stop‑Loss / Take‑Profit
+    - Pozisyon durumuna göre yalnızca BUY→SELL→BUY döngüsüne izin verir
+    """
+    df = df.copy()
+
+    # 1) Her gösterge için sinyal matrisi oluştur
+    signal_matrix = pd.DataFrame(index=df.index)
+    for ind in selected_indicators:
+        mapping = parametric_indicator_mapping.get(ind) or nonparametric_indicator_mapping.get(ind)
+        if mapping is None:
+            continue
+
+        # Göstergeleri ekle
+        params   = indicator_params.get(ind, default_indicator_params.get(ind, {}))
+        add_args = {k: params[k] for k in mapping.get("add_params", []) if k in params}
+        df       = mapping["add_func"](df, **add_args)
+
+        # Sinyal fonksiyonunu çalıştır
+        sig_args = {
+            tgt: params[src]
+            for src, tgt in mapping.get("signal_params", {}).items()
+            if src in params
+        }
+        tmp = mapping["signal_func"](df.copy(), **sig_args)
+        signal_matrix[ind] = tmp["Signal"]
+
+    # 2) Composite + SL/TP + pozisyon döngüsü
+    df["Signal"]    = None
+    position        = False
+    entry_price     = None
+
+    for i, idx in enumerate(df.index):
+        price = df.at[idx, "Close"]
+
+        # 2a) Pozisyonda isek önce SL/TP kontrolü
+        if position and entry_price is not None:
+            # Stop‑Loss
+            if price <= entry_price * (1 - stop_loss):
+                df.at[idx, "Signal"] = "SELL"
+                position    = False
+                entry_price = None
+                continue
+            # Take‑Profit
+            if price >= entry_price * (1 + take_profit):
+                df.at[idx, "Signal"] = "SELL"
+                position    = False
+                entry_price = None
+                continue
+
+        # 2b) Majority‑voting
+        today       = signal_matrix.iloc[i]
+        valid_count = today.notna().sum()
+        if valid_count == 0:
+            continue
+
+        buy_ratio  = (today == "BUY").sum()  / valid_count
+        sell_ratio = (today == "SELL").sum() / valid_count
+
+        # 2c) BUY: yalnızca pozisyon kapalıyken
+        if not position and buy_ratio >= threshold:
+            df.at[idx, "Signal"] = "BUY"
+            position    = True
+            entry_price = price
+            continue
+
+        # 2d) SELL: yalnızca pozisyondayken
+        if position and sell_ratio >= threshold:
+            df.at[idx, "Signal"] = "SELL"
+            position    = False
+            entry_price = None
+            continue
+
+    return df
+
 # ------------------------ STREAMLIT BAŞLANGIÇ ------------------------
 st.set_page_config(page_title="📊 İndikatör Bazlı Strateji Simülatörü", layout="wide")
 st.title("🤖 İndikatör Tabanlı Backtest Uygulaması")
@@ -388,8 +477,18 @@ st.sidebar.subheader("🔧 Parametreli İndikatörler")
 selected_indicators = st.sidebar.multiselect("Parametresi girilebilen göstergeler:", list(parametric_indicator_mapping.keys()))
 
 st.sidebar.subheader("📌 Sabit İndikatörler")
-selected_basic_indicators = st.sidebar.multiselect("Parametresiz göstergeler:", list(nonparametric_indicator_mapping.keys()))
 
+# 1) "Tümünü Seç" butonu
+if st.sidebar.button("▶️ Tümünü Seç"):
+    # session_state içindeki anahtar, multiselect'in key'iyle aynı olmalı
+    st.session_state['selected_basic_indicators'] = list(nonparametric_indicator_mapping.keys())
+
+# 2) Multiselect'i session_state üzerinden yönet
+selected_basic_indicators = st.sidebar.multiselect(
+    "Parametresiz göstergeler:",
+    options=list(nonparametric_indicator_mapping.keys()),
+    key='selected_basic_indicators'
+)
 # ------------------------ GÖSTERGE PARAMETRELERİ ------------------------
 user_indicator_params = {}
 default_indicator_params = {
@@ -431,6 +530,24 @@ composite_threshold = st.sidebar.slider(
     help="Örn: 60% seçersen, seçili göstergelerin en az %60'ı aynı sinyali vermelidir."
 ) / 100  # yüzdelikten orana çeviriyoruz
 
+st.sidebar.subheader("⚙️ Stop‑Loss & Take‑Profit Ayarları")
+stop_loss_pct = st.sidebar.slider(
+    "Stop‑Loss (%)",
+    min_value=0,
+    max_value=100,
+    value=2,
+    step=1,
+    help="Pozisyon açıldıktan sonra en fazla kaç yüzde zarar tolere edilsin?"
+) / 100
+
+take_profit_pct = st.sidebar.slider(
+    "Take‑Profit (%)",
+    min_value=0,
+    max_value=100,
+    value=5,
+    step=1,
+    help="Pozisyon açıldıktan sonra kaç yüzde karla çıkılsın?"
+) / 100
 
 # ------------------------ VERİYİ ÇEK ------------------------
 pipeline = PriceDataPipeline(symbol, str(start_date), str(end_date))
@@ -489,38 +606,69 @@ if st.sidebar.button("🚀 Strateji Testini Başlat"):
         st.subheader(f"📊 {ind} Strateji Grafiği")
         st.plotly_chart(plot_price_with_signals(df, title=f"{ind} - Fiyat, Portföy ve Al/Sat Sinyalleri"), use_container_width=True)
 
-    # Ortak Strateji (Majority Voting)
+    # ------------------------ ORTAK STRATEJİ ------------------------
     if selected_indicators or selected_basic_indicators:
-        st.subheader("🤝 Ortak Strateji (Çoğunluğa Dayalı Sinyal)")
+        st.subheader("🤝 Ortak Strateji Karşılaştırması")
 
-        df = full_df.copy()
-        all_selected_indicators = selected_indicators + selected_basic_indicators
+        all_selected = selected_indicators + selected_basic_indicators
 
-        df = generate_composite_strategy_signals(
-            df=full_df,
-            selected_indicators=selected_indicators + selected_basic_indicators,
+        # ——————————————————————————————————————————————
+        # 1) Normal Composite (SL/TP yok)
+        # ——————————————————————————————————————————————
+        df_normal = full_df.copy()
+        df_normal = generate_composite_strategy_signals(
+            df=df_normal,
+            selected_indicators=all_selected,
             parametric_indicator_mapping=parametric_indicator_mapping,
             nonparametric_indicator_mapping=nonparametric_indicator_mapping,
             indicator_params=user_indicator_params,
             default_indicator_params=default_indicator_params,
             threshold=composite_threshold
         )
+        df_normal = df_normal[df_normal['Date'] >= user_start_date_aware].reset_index(drop=True)
+        df_normal = run_backtest(df_normal, initial_cash=10000)
+        perf_normal = evaluate_performance(df_normal, initial_cash=10000)
 
-
-        df = df[df['Date'] >= user_start_date_aware].reset_index(drop=True)
-        df = run_backtest(df, initial_cash=10000)
-
-        # Performans kaydı
-        perf = evaluate_performance(df, initial_cash=10000)
-        performances.append({"Strateji": "🧠 Ortak Strateji", **perf})
-        strategy_results["🧠 Ortak Strateji"] = df
-
-        # Grafik
-        st.subheader("📊 Ortak Strateji Grafiği")
+        st.markdown("### 📊 Composite (Normal)")
         st.plotly_chart(
-            plot_price_with_signals(df, title="🧠 Ortak Strateji - Fiyat, Portföy ve Al/Sat Sinyalleri"),
+            plot_price_with_signals(df_normal, title="Ortak Strateji (Normal)"),
             use_container_width=True
         )
+
+        # Performans kaydı
+        performances.append({"Strateji": "🧠 Composite (Normal)", **perf_normal})
+        strategy_results["🧠 Composite (Normal)"] = df_normal
+
+
+        # ——————————————————————————————————————————————
+        # 2) Composite with SL/TP
+        # ——————————————————————————————————————————————
+        df_sltp = full_df.copy()
+        df_sltp = generate_composite_strategy_signals_with_sl_tp(
+            df=df_sltp,
+            selected_indicators=all_selected,
+            parametric_indicator_mapping=parametric_indicator_mapping,
+            nonparametric_indicator_mapping=nonparametric_indicator_mapping,
+            indicator_params=user_indicator_params,
+            default_indicator_params=default_indicator_params,
+            threshold=composite_threshold,
+            stop_loss=stop_loss_pct,
+            take_profit=take_profit_pct
+        )
+        df_sltp = df_sltp[df_sltp['Date'] >= user_start_date_aware].reset_index(drop=True)
+        df_sltp = run_backtest(df_sltp, initial_cash=10000)
+        perf_sltp = evaluate_performance(df_sltp, initial_cash=10000)
+
+        st.markdown("### 📊 Composite (Stop‑Loss & Take‑Profit)")
+        st.plotly_chart(
+            plot_price_with_signals(df_sltp, title="Ortak Strateji (SL/TP)"),
+            use_container_width=True
+        )
+
+        # Performans kaydı
+        performances.append({"Strateji": "🧠 Composite (SL/TP)", **perf_sltp})
+        strategy_results["🧠 Composite (SL/TP)"] = df_sltp
+
 
 
     # Gelişmiş stratejiler
