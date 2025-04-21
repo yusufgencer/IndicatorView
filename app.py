@@ -602,8 +602,9 @@ st.set_page_config(page_title="📊 İndikatör Bazlı Strateji Simülatörü", 
 st.title("🤖 İndikatör Tabanlı Backtest Uygulaması")
 
 # ------------------------ HİSSE SEÇİMİ ------------------------
-st.sidebar.header("📈 Hisse Seçimi")
-selected_market = st.sidebar.selectbox("Borsa", ["NASDAQ", "BIST"])
+st.sidebar.header("📈 Varlık Seçimi")
+selected_market = st.sidebar.selectbox("Piyasa", ["NASDAQ", "BIST", "CRYPTO"])
+
 
 nasdaq_symbols = {
     "Apple (AAPL)": "AAPL", "Tesla (TSLA)": "TSLA", "Amazon (AMZN)": "AMZN",
@@ -615,7 +616,22 @@ bist_symbols = {
     "SASA (SASA.IS)": "SASA.IS", "BIMAS (BIMAS.IS)": "BIMAS.IS", "SISE (SISE.IS)": "SISE.IS",
     "KORDS (KORDS.IS)": "KORDS.IS", "TUPRS (TUPRS.IS)": "TUPRS.IS", "PETKM (PETKM.IS)": "PETKM.IS", "ISCTR (ISCTR.IS)": "ISCTR.IS"
 }
-symbol_dict = nasdaq_symbols if selected_market == "NASDAQ" else bist_symbols
+
+crypto_symbols = {
+    "Bitcoin (BTC-USD)": "BTC-USD",
+    "Ethereum (ETH-USD)": "ETH-USD",
+    "Solana (SOL-USD)": "SOL-USD",
+    "Cardano (ADA-USD)": "ADA-USD",
+    "Binance Coin (BNB-USD)": "BNB-USD"
+}
+
+if selected_market == "NASDAQ":
+    symbol_dict = nasdaq_symbols
+elif selected_market == "BIST":
+    symbol_dict = bist_symbols
+else:
+    symbol_dict = crypto_symbols
+
 symbol_label = st.sidebar.selectbox("Hisse Senedi Seçin", list(symbol_dict.keys()))
 symbol = symbol_dict[symbol_label]
 
