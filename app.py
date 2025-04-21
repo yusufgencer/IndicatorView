@@ -728,6 +728,19 @@ trailing_stop_pct = st.sidebar.slider(
     help="Pozisyon açıldıktan sonra zararı takip eden stop seviyesi yüzde kaç olsun?"
 ) / 100
 
+st.sidebar.subheader("📉 Sharpe Oranı Ayarı")
+
+# 🎚️ Kullanıcıdan risksiz getiri oranını al
+risk_free_rate = st.sidebar.slider(
+    "Risksiz Getiri Oranı (Yıllık, %)",
+    min_value=0.0,
+    max_value=100.0,
+    value=5.0,
+    step=0.5,
+    help="Sharpe oranı için yıllık risksiz getiri oranını belirleyin (örnek: %5 için 5.0)"
+) / 100
+
+
 # ------------------------ VERİYİ ÇEK ------------------------
 pipeline = PriceDataPipeline(symbol, str(start_date), str(end_date))
 full_df = pipeline.fetch_daily_stock_data()
@@ -748,7 +761,7 @@ if st.sidebar.button("🚀 Strateji Testini Başlat"):
     bh_df = base_df.copy()
     bh_df['Signal'] = ["BUY"] + [None] * (len(bh_df) - 1)
     bh_df = run_backtest(bh_df, initial_cash=10000)
-    perf = evaluate_performance(bh_df, initial_cash=10000)
+    perf = evaluate_performance(bh_df, initial_cash=10000, risk_free_rate=risk_free_rate)
     performances.append({"Strateji": "BUY & HOLD", **perf})
     st.subheader("📊 BUY & HOLD Strateji Grafiği")
     st.plotly_chart(plot_price_with_signals(bh_df, title="BUY & HOLD - Fiyat ve Portföy"), use_container_width=True)
@@ -764,7 +777,7 @@ if st.sidebar.button("🚀 Strateji Testini Başlat"):
         df = df[df['Date'] >= user_start_date_aware].reset_index(drop=True)
         df = run_backtest(df, initial_cash=10000)
         strategy_results[ind] = df
-        perf = evaluate_performance(df, initial_cash=10000)
+        perf = evaluate_performance(df, initial_cash=10000, risk_free_rate=risk_free_rate)
         performances.append({"Strateji": ind, **perf})
         st.subheader(f"📊 {ind} Strateji Grafiği")
         st.plotly_chart(plot_price_with_signals(df, title=f"{ind} - Fiyat, Portföy ve Al/Sat Sinyalleri"), use_container_width=True)
@@ -780,7 +793,7 @@ if st.sidebar.button("🚀 Strateji Testini Başlat"):
         df = df[df['Date'] >= user_start_date_aware].reset_index(drop=True)
         df = run_backtest(df, initial_cash=10000)
         strategy_results[ind] = df
-        perf = evaluate_performance(df, initial_cash=10000)
+        perf = evaluate_performance(df, initial_cash=10000, risk_free_rate=risk_free_rate)
         performances.append({"Strateji": ind, **perf})
         st.subheader(f"📊 {ind} Strateji Grafiği")
         st.plotly_chart(plot_price_with_signals(df, title=f"{ind} - Fiyat, Portföy ve Al/Sat Sinyalleri"), use_container_width=True)
@@ -806,7 +819,7 @@ if st.sidebar.button("🚀 Strateji Testini Başlat"):
         )
         df_normal = df_normal[df_normal['Date'] >= user_start_date_aware].reset_index(drop=True)
         df_normal = run_backtest(df_normal, initial_cash=10000)
-        perf_normal = evaluate_performance(df_normal, initial_cash=10000)
+        perf_normal = evaluate_performance(df_normal, initial_cash=10000, risk_free_rate=risk_free_rate)
 
         st.markdown("### 📊 Composite (Normal)")
         st.plotly_chart(
@@ -836,7 +849,7 @@ if st.sidebar.button("🚀 Strateji Testini Başlat"):
         )
         df_sltp = df_sltp[df_sltp['Date'] >= user_start_date_aware].reset_index(drop=True)
         df_sltp = run_backtest(df_sltp, initial_cash=10000)
-        perf_sltp = evaluate_performance(df_sltp, initial_cash=10000)
+        perf_sltp = evaluate_performance(df_sltp, initial_cash=10000, risk_free_rate=risk_free_rate)
 
         st.markdown("### 📊 Composite (Stop‑Loss & Take‑Profit)")
         st.plotly_chart(
@@ -864,7 +877,7 @@ if st.sidebar.button("🚀 Strateji Testini Başlat"):
         )
         df_trailing = df_trailing[df_trailing['Date'] >= user_start_date_aware].reset_index(drop=True)
         df_trailing = run_backtest(df_trailing, initial_cash=10000)
-        perf_trailing = evaluate_performance(df_trailing, initial_cash=10000)
+        perf_trailing = evaluate_performance(df_trailing, initial_cash=10000, risk_free_rate=risk_free_rate)
 
         st.markdown("### 📊 Composite (Buy Only + Trailing SL & TP)")
         st.plotly_chart(
@@ -892,7 +905,7 @@ if st.sidebar.button("🚀 Strateji Testini Başlat"):
         )
         df_dynamic = df_dynamic[df_dynamic['Date'] >= user_start_date_aware].reset_index(drop=True)
         df_dynamic = run_backtest(df_dynamic, initial_cash=10000)
-        perf_dynamic = evaluate_performance(df_dynamic, initial_cash=10000)
+        perf_dynamic = evaluate_performance(df_dynamic, initial_cash=10000, risk_free_rate=risk_free_rate)
 
         st.markdown("### 📊 Composite (Trailing SL & TP)")
         st.plotly_chart(
@@ -912,7 +925,7 @@ if st.sidebar.button("🚀 Strateji Testini Başlat"):
         df = strategy_funcs[strat_name](df)
         df = df[df['Date'] >= user_start_date_aware].reset_index(drop=True)
         df = run_backtest(df, initial_cash=10000)
-        perf = evaluate_performance(df, initial_cash=10000)
+        perf = evaluate_performance(df, initial_cash=10000, risk_free_rate=risk_free_rate)
         performances.append({"Strateji": strat_name, **perf})
         st.subheader(f"📊 {strat_name} Strateji Grafiği")
         st.plotly_chart(plot_price_with_signals(df, title=f"{strat_name} - Fiyat, Portföy ve Al/Sat Sinyalleri"), use_container_width=True)

@@ -30,12 +30,12 @@ def calculate_max_drawdown(df: pd.DataFrame) -> float:
     return max_drawdown * 100
 
 
-def evaluate_performance(df: pd.DataFrame, initial_cash: float) -> dict:
+def evaluate_performance(df: pd.DataFrame, initial_cash: float, risk_free_rate: float = 0.01) -> dict:
     start_value = df['Portfolio'].iloc[0]
     final_value = df['Portfolio'].iloc[-1]
     
     arr = calculate_arr(df, initial_cash, final_value)
-    sharpe = calculate_sharpe_ratio(df)
+    sharpe = calculate_sharpe_ratio(df, risk_free_rate)
     mdd = calculate_max_drawdown(df)
 
     total_return = ((final_value - start_value) / start_value) * 100
@@ -48,3 +48,4 @@ def evaluate_performance(df: pd.DataFrame, initial_cash: float) -> dict:
         "Sharpe Oranı": round(sharpe, 2),
         "Maksimum Düşüş (%)": round(mdd, 2)
     }
+
